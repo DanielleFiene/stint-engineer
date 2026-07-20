@@ -1,16 +1,16 @@
+/**
+ * Group frames by lap, decide completeness, detect timestamp gaps.
+ */
+
 import type { FrameGap, TelemetryFrame } from "./types.ts";
 
-/** Normalized lap distance must start near the start/finish line. */
-const POS_START_TOLERANCE = 0.05;
-/** Lap must reach the end of the timing loop. */
-const POS_END_MIN = 0.95;
-/** Speed below this (km/h) counts as "stopped" for end-of-lap detection. */
-const STOP_SPEED_KMH = 5;
-/** Consecutive low-speed frames at the end imply the car stopped on track. */
-const STOP_SUSTAINED_FRAMES = 5;
+const POS_START_TOLERANCE = 0.05; // lap must begin near pos 0
+const POS_END_MIN = 0.95; // lap must reach the timing loop end
+const STOP_SPEED_KMH = 5; // below this counts as stopped
+const STOP_SUSTAINED_FRAMES = 5; // consecutive tail frames for stop detection
+const GAP_THRESHOLD_MS = 500; // normal spacing ~70–100 ms
 
-const GAP_THRESHOLD_MS = 500;
-
+/** Partition frames by `lap`, each group sorted by `ts`. */
 export function splitLaps(frames: TelemetryFrame[]): Map<number, TelemetryFrame[]> {
   const byLap = new Map<number, TelemetryFrame[]>();
   for (const frame of frames) {
@@ -27,6 +27,7 @@ export function splitLaps(frames: TelemetryFrame[]): Map<number, TelemetryFrame[
   return byLap;
 }
 
+/** True when the car stops on track before `pos` reaches the finish straight. */
 function endsStoppedBeforeFinish(frames: TelemetryFrame[]): boolean {
   if (frames.length < STOP_SUSTAINED_FRAMES) {
     return false;
@@ -39,6 +40,7 @@ function endsStoppedBeforeFinish(frames: TelemetryFrame[]): boolean {
   return tail.every((f) => f.spd < STOP_SPEED_KMH);
 }
 
+/** Full lap from ~pos 0 to ~1 without a sustained stop before the line. */
 export function isCompleteLap(lapFrames: TelemetryFrame[]): boolean {
   if (lapFrames.length === 0) {
     return false;
@@ -58,6 +60,7 @@ export function isCompleteLap(lapFrames: TelemetryFrame[]): boolean {
   return true;
 }
 
+/** Human-readable reason when `isCompleteLap` is false. */
 export function exclusionReason(lapFrames: TelemetryFrame[]): string | null {
   if (lapFrames.length === 0) {
     return "no frames recorded for this lap";
@@ -78,6 +81,7 @@ export function exclusionReason(lapFrames: TelemetryFrame[]): string | null {
   return null;
 }
 
+/** Inter-frame deltas above threshold — missing samples, not bad sensor values. */
 export function detectGaps(lapFrames: TelemetryFrame[]): FrameGap[] {
   if (lapFrames.length < 2) {
     return [];

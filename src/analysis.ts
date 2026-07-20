@@ -1,3 +1,7 @@
+/**
+ * Per-lap metrics, sector splits, stint-level tyre trend.
+ */
+
 import { correctTyreTemps } from "./telemetry.ts";
 import type {
   LapAnalysis,
@@ -8,13 +12,7 @@ import type {
   TyreTrendResult,
 } from "./types.ts";
 
-/**
- * Typical inter-frame spacing in this stint is ~70–100ms. When frames are
- * dropped, the raw timestamp delta can be seconds long; using it as-is in a
- * time-weighted average would treat the car as holding the pre-gap sample for
- * the entire missing interval. We cap each interval's weight so unknown time
- * is not attributed to throttle/brake/speed readings on either side of a gap.
- */
+/** Cap interval weight so dropped-frame gaps do not dominate averages (~2× normal spacing). */
 const MAX_INTERVAL_WEIGHT_MS = 200;
 
 function intervalWeightMs(prev: TelemetryFrame, curr: TelemetryFrame): number {
@@ -22,13 +20,7 @@ function intervalWeightMs(prev: TelemetryFrame, curr: TelemetryFrame): number {
   return Math.min(delta, MAX_INTERVAL_WEIGHT_MS);
 }
 
-/**
- * Lap duration for frames already scoped to one `lap` value (see splitLaps).
- * Elapsed time is last.ts − first.ts among those frames only; the first frame
- * of the following lap belongs to another group and is never included. Each
- * inter-frame delta inside the lap—including a large gap where samples were
- * lost—is counted in full, because wall-clock lap time still advanced.
- */
+/** Wall-clock lap time: last.ts − first.ts within this lap group only (gaps count in full). */
 function lapTimeMs(sorted: TelemetryFrame[]): number {
   if (sorted.length < 2) {
     return 0;
@@ -36,7 +28,7 @@ function lapTimeMs(sorted: TelemetryFrame[]): number {
   return sorted[sorted.length - 1]!.ts - sorted[0]!.ts;
 }
 
-/** Time-weighted mean using the sample at the start of each capped interval. */
+/** Mean weighted by capped inter-frame intervals; sample value is the earlier frame. */
 function timeWeightedMean(
   sorted: TelemetryFrame[],
   read: (frame: TelemetryFrame) => number,
@@ -84,6 +76,7 @@ function sectorTimeMs(sectorFrames: TelemetryFrame[]): number {
   return total;
 }
 
+/** Split lap into equal `pos` bands; sector time uses full inter-frame deltas. */
 export function computeSectors(
   lapFrames: TelemetryFrame[],
   sectorCount = 3,
@@ -113,6 +106,7 @@ export function computeSectors(
   return sectors;
 }
 
+/** Per-sector lap time delta (lap2 − lap1). */
 export function compareLapSectors(
   lap1Sectors: SectorMetrics[],
   lap2Sectors: SectorMetrics[],
@@ -188,6 +182,7 @@ function linearRegression(
   return { slope, intercept };
 }
 
+/** °C per lap slope per corner; `hottest` = highest stint mean average. */
 export function tyreTempTrend(allValidFrames: TelemetryFrame[]): TyreTrendResult {
   const byLap = new Map<number, TelemetryFrame[]>();
   for (const frame of allValidFrames) {
@@ -233,6 +228,7 @@ export function tyreTempTrend(allValidFrames: TelemetryFrame[]): TyreTrendResult
   return { perTyre, hottest, lapAverages };
 }
 
+/** Summary for one complete lap (time-weighted inputs, frame-mean tyres). */
 export function analyzeLap(lapFrames: TelemetryFrame[]): LapAnalysis {
   const sorted = [...lapFrames].sort((a, b) => a.ts - b.ts);
   const lap = sorted[0]!.lap;

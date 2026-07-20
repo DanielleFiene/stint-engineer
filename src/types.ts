@@ -1,4 +1,9 @@
-/** Wire-encoded tyre block (tenths of °C). */
+/**
+ * Shared TypeScript shapes for stint JSON and analysis output.
+ * Field names match the wire frame in `data/recorder.rs`.
+ */
+
+/** Four tyre corners on the wire — fixed-point tenths of °C (see recorder `TEMPERATURE` scale). */
 export interface WireTyres {
   fl: number;
   fr: number;
@@ -6,21 +11,21 @@ export interface WireTyres {
   rr: number;
 }
 
-/** One telemetry frame as stored in the stint JSON. */
+/** One frame as stored in the stint stream. */
 export interface TelemetryFrame {
-  ts: number;
+  ts: number; // ms since recording started
   lap: number;
-  pos: number;
-  spd: number;
-  thr: number;
-  brk: number;
-  str: number;
-  gear: number;
+  pos: number; // normalized lap position, 0.0..1.0
+  spd: number; // km/h
+  thr: number; // 0.0..1.0
+  brk: number; // 0.0..1.0
+  str: number; // steering angle, degrees (negative = left)
+  gear: number; // -1 reverse, 0 neutral, 1..8 forward
   rpm: number;
   tyres: WireTyres;
 }
 
-/** Tyre temperatures in °C after fixed-point decode. */
+/** Tyre core temperatures in °C after `/10` decode. */
 export interface TyreTempsCelsius {
   fl: number;
   fr: number;
@@ -33,6 +38,7 @@ export interface StintRecorderInfo {
   version: string;
 }
 
+/** Top-level stint file written by the capture agent. */
 export interface StintTelemetryFile {
   schema: string;
   recorder: StintRecorderInfo;
@@ -42,6 +48,7 @@ export interface StintTelemetryFile {
   frames: TelemetryFrame[];
 }
 
+/** Frame dropped by `filterValidFrames` with human-readable reasons. */
 export interface RemovedFrame {
   lap: number;
   ts: number;
@@ -49,6 +56,7 @@ export interface RemovedFrame {
   frame: TelemetryFrame;
 }
 
+/** Consecutive-frame timestamp hole (dropped samples, not corrupt values). */
 export interface FrameGap {
   lap: number;
   startTs: number;
@@ -56,6 +64,7 @@ export interface FrameGap {
   durationMs: number;
 }
 
+/** One sector slice of a lap by normalized `pos`. */
 export interface SectorMetrics {
   sector: number;
   posStart: number;
@@ -64,12 +73,14 @@ export interface SectorMetrics {
   sectorTimeMs: number;
 }
 
+/** Sector time delta between two laps (positive = second lap slower). */
 export interface SectorComparison {
   sector: number;
   deltaTimeMs: number;
   faster: "lap1" | "lap2" | "tie";
 }
 
+/** Per-lap summary returned from `analyzeLap`. */
 export interface LapAnalysis {
   lap: number;
   lapTimeMs: number;
@@ -81,6 +92,7 @@ export interface LapAnalysis {
   sectors: SectorMetrics[];
 }
 
+/** Linear tyre warming trend across lap indices in the stint. */
 export interface TyreTrendResult {
   perTyre: Record<
     keyof TyreTempsCelsius,
@@ -90,6 +102,7 @@ export interface TyreTrendResult {
   lapAverages: Array<{ lap: number; temps: TyreTempsCelsius }>;
 }
 
+/** Lap rejected before analysis (partial stint or stop on track). */
 export interface ExcludedLap {
   lap: number;
   reason: string;

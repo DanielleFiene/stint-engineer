@@ -1,3 +1,7 @@
+/**
+ * Hono HTTP entry — loads bundled stint JSON and returns analysis as JSON.
+ */
+
 import { Hono } from "hono";
 import {
   analyzeLap,
@@ -18,6 +22,7 @@ const PORT = Number(process.env.PORT) || 3000;
 
 const app = new Hono();
 
+/** Full `/analyze` payload: filter → lap split → metrics on complete laps only. */
 async function buildAnalysisResponse() {
   const stint = await loadTelemetry(TELEMETRY_PATH);
   const { valid, removed } = filterValidFrames(stint.frames);

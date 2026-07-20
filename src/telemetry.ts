@@ -1,3 +1,8 @@
+/**
+ * Load stint JSON, validate frames, decode tyre temps.
+ * Wire encoding matches `encode_frame` in `data/recorder.rs`.
+ */
+
 import type {
   RemovedFrame,
   StintTelemetryFile,
@@ -5,18 +10,21 @@ import type {
   TyreTempsCelsius,
 } from "./types.ts";
 
-/** Upper bound for plausible on-track speed (km/h); above this is treated as corrupt. */
+/** Plausible on-track speed ceiling (km/h) for GT/prototype-class cars. */
 const MAX_SPEED_KMH = 360;
-/** Upper bound for plausible engine RPM in this series. */
+/** Plausible engine RPM ceiling for the same class. */
 const MAX_RPM = 16_000;
 
+/** Matches recorder `scales::TEMPERATURE` — divide wire tyres by this for °C. */
 export const TYRE_TEMP_SCALE = 10;
 
+/** Read and parse a stint telemetry JSON file. */
 export async function loadTelemetry(path: string): Promise<StintTelemetryFile> {
   const raw = await Bun.file(path).text();
   return JSON.parse(raw) as StintTelemetryFile;
 }
 
+/** Decode fixed-point wire tyres to °C (recorder stores tenths of a degree). */
 export function correctTyreTemps(frame: TelemetryFrame): TyreTempsCelsius {
   return {
     fl: frame.tyres.fl / TYRE_TEMP_SCALE,
@@ -40,6 +48,7 @@ function invalidReasons(frame: TelemetryFrame): string[] {
   return reasons;
 }
 
+/** Drop physically impossible frames; return clean stream and removal log. */
 export function filterValidFrames(frames: TelemetryFrame[]): {
   valid: TelemetryFrame[];
   removed: RemovedFrame[];
